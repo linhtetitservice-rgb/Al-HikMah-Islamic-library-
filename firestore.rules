@@ -1,0 +1,182 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'linhtetitservice@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Blueprint for User
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'role', 'isPremium', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'role', 'isPremium', 'createdAt', 'updatedAt', 'savedBookmarks', 'readingHistory', 'notes', 'bookmarks', 'personalNotes'])
+        && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 200
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 150
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2000))
+        && data.role in ['member', 'student', 'scholar', 'admin']
+        && data.isPremium is bool
+        && (!('savedBookmarks' in data) || (data.savedBookmarks is list && data.savedBookmarks.size() <= 200))
+        && (!('readingHistory' in data) || (data.readingHistory is list && data.readingHistory.size() <= 200))
+        && (!('notes' in data) || (data.notes is list && data.notes.size() <= 200))
+        && (!('bookmarks' in data) || (data.bookmarks is list && data.bookmarks.size() <= 200))
+        && (!('personalNotes' in data) || (data.personalNotes is list && data.personalNotes.size() <= 200))
+        && data.createdAt is string && data.createdAt.size() <= 50
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
+    }
+
+    // Validation Blueprint for Book
+    function isValidBook(data) {
+      return data.keys().hasAll(['id', 'titleMm', 'authorMm', 'category', 'totalPages', 'isMemberOnly', 'readCount', 'createdAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.titleMm is string && data.titleMm.size() > 0 && data.titleMm.size() <= 300
+        && (!('titleAr' in data) || (data.titleAr is string && data.titleAr.size() <= 300))
+        && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 300))
+        && data.authorMm is string && data.authorMm.size() > 0 && data.authorMm.size() <= 200
+        && (!('authorAr' in data) || (data.authorAr is string && data.authorAr.size() <= 200))
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 50
+        && (!('categoryMm' in data) || (data.categoryMm is string && data.categoryMm.size() <= 100))
+        && (!('descriptionMm' in data) || (data.descriptionMm is string && data.descriptionMm.size() <= 2000))
+        && (!('coverColor' in data) || (data.coverColor is string && data.coverColor.size() <= 100))
+        && data.totalPages is number && data.totalPages >= 0
+        && data.isMemberOnly is bool
+        && (!('language' in data) || data.language in ['my', 'ar', 'both'])
+        && (!('publishedYear' in data) || (data.publishedYear is string && data.publishedYear.size() <= 10))
+        && data.readCount is number && data.readCount >= 0
+        && (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 5))
+        && (!('isUserUploaded' in data) || data.isUserUploaded is bool)
+        && (!('uploaderId' in data) || (data.uploaderId is string && data.uploaderId.size() <= 128))
+        && (!('uploaderName' in data) || (data.uploaderName is string && data.uploaderName.size() <= 100))
+        && (!('fileData' in data) || (data.fileData is string && data.fileData.size() <= 15000000))
+        && (!('telegramChannel' in data) || (data.telegramChannel is string && data.telegramChannel.size() <= 150))
+        && (!('telegramPostId' in data) || (data.telegramPostId is string && data.telegramPostId.size() <= 100))
+        && data.createdAt is string && data.createdAt.size() <= 50;
+    }
+
+    // Validation Blueprint for Bookmark
+    function isValidBookmark(data) {
+      return data.keys().hasAll(['id', 'userId', 'bookId', 'bookTitle', 'lastPage', 'totalPages', 'updatedAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128
+        && data.bookId is string && data.bookId.size() > 0 && data.bookId.size() <= 128
+        && data.bookTitle is string && data.bookTitle.size() > 0 && data.bookTitle.size() <= 300
+        && data.lastPage is number && data.lastPage >= 0
+        && data.totalPages is number && data.totalPages >= 0
+        && (!('percentage' in data) || (data.percentage is number && data.percentage >= 0 && data.percentage <= 100))
+        && data.updatedAt is string && data.updatedAt.size() <= 50;
+    }
+
+    // Validation Blueprint for PersonalNote
+    function isValidPersonalNote(data) {
+      return data.keys().hasAll(['id', 'userId', 'bookId', 'noteContent', 'createdAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128
+        && data.bookId is string && data.bookId.size() > 0 && data.bookId.size() <= 128
+        && (!('pageNumber' in data) || (data.pageNumber is number && data.pageNumber >= 0))
+        && data.noteContent is string && data.noteContent.size() > 0 && data.noteContent.size() <= 3000
+        && (!('quoteSnippet' in data) || (data.quoteSnippet is string && data.quoteSnippet.size() <= 1000))
+        && data.createdAt is string && data.createdAt.size() <= 50;
+    }
+
+    // Validation Blueprint for FatwaQuestion
+    function isValidFatwaQuestion(data) {
+      return data.keys().hasAll(['id', 'questionMm', 'category', 'authorName', 'status', 'createdAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.questionMm is string && data.questionMm.size() > 0 && data.questionMm.size() <= 3000
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 50
+        && data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 100
+        && (!('authorEmail' in data) || (data.authorEmail is string && data.authorEmail.size() <= 150))
+        && (!('authorUid' in data) || (data.authorUid is string && data.authorUid.size() <= 128))
+        && data.status in ['pending', 'answered', 'archived']
+        && (!('answerMm' in data) || (data.answerMm is string && data.answerMm.size() <= 6000))
+        && (!('answeredBy' in data) || (data.answeredBy is string && data.answeredBy.size() <= 150))
+        && (!('references' in data) || (data.references is string && data.references.size() <= 1000))
+        && data.createdAt is string && data.createdAt.size() <= 50
+        && (!('answeredAt' in data) || (data.answeredAt is string && data.answeredAt.size() <= 50));
+    }
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && incoming().uid == request.auth.uid;
+      allow update: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidUser(incoming())
+                    && (!('uid' in existing()) || incoming().uid == existing().uid)
+                    && (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt);
+      allow delete: if isAdmin();
+
+      // Subcollection: Bookmarks
+      match /bookmarks/{bookmarkId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(bookmarkId) && isValidBookmark(incoming()) && incoming().userId == request.auth.uid;
+        allow delete: if isOwner(userId);
+      }
+
+      // Subcollection: Notes
+      match /notes/{noteId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(noteId) && isValidPersonalNote(incoming()) && incoming().userId == request.auth.uid;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Books Collection Rules
+    match /books/{bookId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(bookId) && isValidBook(incoming())
+                    && (!('uploaderId' in incoming()) || incoming().uploaderId == request.auth.uid);
+      allow update: if isSignedIn() && isValidId(bookId) && isValidBook(incoming()) && (
+        isAdmin() ||
+        (existing().uploaderId == request.auth.uid) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['readCount', 'rating']))
+      );
+      allow delete: if isSignedIn() && (existing().uploaderId == request.auth.uid || isAdmin());
+    }
+
+    // Fatwa Questions Rules
+    match /fatwaQuestions/{questionId} {
+      allow read: if true;
+      allow create: if isValidId(questionId) && isValidFatwaQuestion(incoming()) && incoming().status == 'pending';
+      allow update: if isSignedIn() && isValidId(questionId) && isValidFatwaQuestion(incoming()) && (
+        isAdmin() ||
+        (existing().authorUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['questionMm']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Connection test rule
+    match /test/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

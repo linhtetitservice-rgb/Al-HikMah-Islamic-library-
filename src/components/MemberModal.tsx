@@ -16,6 +16,7 @@ import {
 import { BookItem, UserProfile } from '../types';
 import { toMyanmarDigits } from '../utils/islamicTimes';
 import { DailyWisdom } from './DailyWisdom';
+import { signInWithGoogle } from '../services/firebase';
 
 interface MemberModalProps {
   currentUser: UserProfile | null;
@@ -44,6 +45,25 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState<'member' | 'student' | 'scholar'>('member');
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Handle Google Sign-In with Firebase
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsGoogleSigningIn(true);
+      setAuthError(null);
+      const profile = await signInWithGoogle();
+      if (profile) {
+        onLogin(profile);
+      }
+    } catch (err: any) {
+      console.error('Google Sign-In failed:', err);
+      setAuthError('Google ဖြင့် ဝင်ရောက်ခြင်း မအောင်မြင်ပါ။ ပြန်လည်ကြိုးစားပေးပါ');
+    } finally {
+      setIsGoogleSigningIn(false);
+    }
+  };
 
   // Handle Demo Quick Logins
   const handleQuickDemoLogin = (role: 'member' | 'student' | 'scholar') => {
@@ -190,6 +210,62 @@ export const MemberModal: React.FC<MemberModalProps> = ({
           {!currentUser ? (
             /* Authentication Form */
             <div className="space-y-6">
+              {/* Google Sign-in with Firebase Database */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] uppercase tracking-wider text-emerald-800 font-semibold font-sans flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Firebase Cloud Database ဝင်ရောက်မှု:</span>
+                  </span>
+                  <span className="text-[10px] text-stone-400 font-mono">Firestore Auth</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleSigningIn}
+                  className="w-full py-3 px-4 rounded-xl border border-stone-300 hover:border-emerald-700 bg-white hover:bg-stone-50 text-stone-800 font-myanmar text-xs font-semibold shadow-xs flex items-center justify-center gap-3 transition-all disabled:opacity-60"
+                >
+                  {isGoogleSigningIn ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-emerald-800 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Google ဖြင့် ချိတ်ဆက်နေပါသည်...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.36 24 12 24z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                        />
+                      </svg>
+                      <span>Google အကောင့်ဖြင့် တိုက်ရိုက်ဝင်ရောက်ရန် (Firebase Sync)</span>
+                    </>
+                  )}
+                </button>
+
+                {authError && (
+                  <p className="text-xs text-red-600 font-myanmar text-center">{authError}</p>
+                )}
+              </div>
+
+              <div className="relative flex items-center justify-center">
+                <div className="border-t border-stone-200 w-full"></div>
+                <span className="bg-white px-3 text-[11px] text-stone-400 font-myanmar">သို့မဟုတ် နမူနာအကောင့်များ</span>
+              </div>
+
               {/* Quick 1-Click Demo Profiles */}
               <div className="space-y-2">
                 <span className="text-[11px] uppercase tracking-wider text-stone-500 font-semibold font-sans">
@@ -415,7 +491,14 @@ export const MemberModal: React.FC<MemberModalProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="text-stone-500">အသင်းဝင် အဆင့်:</span>
                       <span className="font-semibold text-emerald-800">
-                        {currentUser.role === 'scholar' ? 'ဓမ္မပညာရှင် (Mufti / Scholar)' : 'သီးသန့် မန်ဘာ (Verified Member)'}
+                        {currentUser.role === 'scholar' ? 'ဓမ္မပညာရှင် (Mufti / Scholar)' : currentUser.role === 'admin' ? 'အက်ဒမင် (Administrator)' : 'သီးသန့် မန်ဘာ (Verified Member)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-stone-500">ဒေတာဘေ့စ် စနစ်:</span>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-900 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                        <span>Firebase Cloud Database ချိတ်ဆက်ပြီး</span>
                       </span>
                     </div>
                     <div className="flex items-center justify-between">

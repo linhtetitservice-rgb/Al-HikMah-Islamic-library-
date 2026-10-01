@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Upload, User, LogIn, Sparkles } from 'lucide-react';
+import { BookOpen, Upload, User, LogIn, Sparkles, Send } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface NavigationProps {
@@ -9,6 +9,7 @@ interface NavigationProps {
   onOpenAuthModal: () => void;
   onOpenUploadModal: () => void;
   onOpenDailyWisdom?: () => void;
+  onOpenTelegramSync?: () => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -18,6 +19,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenAuthModal,
   onOpenUploadModal,
   onOpenDailyWisdom,
+  onOpenTelegramSync,
 }) => {
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-stone-200 sticky top-0 z-40">
@@ -82,6 +84,18 @@ export const Navigation: React.FC<NavigationProps> = ({
 
         {/* Zone 3: 1-2 primary actions */}
         <div className="flex items-center gap-3">
+          {onOpenTelegramSync && (
+            <button
+              onClick={onOpenTelegramSync}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-300/80 rounded-lg transition-colors whitespace-nowrap shrink-0 shadow-2xs"
+              title="Telegram Channel နှင့် ချိတ်ဆက်မှု စီမံရန်"
+            >
+              <Send className="w-3.5 h-3.5 text-[#0088cc] -rotate-12" />
+              <span className="font-myanmar hidden sm:inline">Telegram ချိတ်ဆက်မှု</span>
+              <span className="font-myanmar sm:hidden">Telegram</span>
+            </button>
+          )}
+
           {currentUser && onOpenDailyWisdom && (
             <button
               onClick={onOpenDailyWisdom}

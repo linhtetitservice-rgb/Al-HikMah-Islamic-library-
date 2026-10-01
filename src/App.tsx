@@ -7,6 +7,7 @@ import { FatwaView } from './components/FatwaView';
 import { ZakatCalculator } from './components/ZakatCalculator';
 import { MemberModal } from './components/MemberModal';
 import { UploadBookModal } from './components/UploadBookModal';
+import { TelegramSyncModal } from './components/TelegramSyncModal';
 import { PrayerTimesModal } from './components/PrayerTimesModal';
 import { Footer } from './components/Footer';
 import { DailyWisdom } from './components/DailyWisdom';
@@ -14,6 +15,17 @@ import { INITIAL_BOOKS } from './data/initialBooks';
 import { INITIAL_FATWAS } from './data/initialFatwas';
 import { MYANMAR_CITIES } from './utils/islamicTimes';
 import { BookItem, CityLocation, FatwaItem, UserProfile } from './types';
+import {
+  auth,
+  syncUserProfile,
+  saveUserProgressToFirestore,
+  subscribeToBooks,
+  saveBookToFirestore,
+  subscribeToFatwas,
+  submitFatwaQuestionToFirestore,
+  signOutUser,
+} from './services/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
   // Navigation active tab
@@ -63,7 +75,17 @@ export default function App() {
     const saved = localStorage.getItem('alhikmah_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const u = JSON.parse(saved);
+        if (u) {
+          return {
+            ...u,
+            readingHistory: u.readingHistory || [],
+            bookmarks: u.bookmarks || [],
+            personalNotes: u.personalNotes || [],
+            savedBookmarks: u.savedBookmarks || [],
+            notes: u.notes || [],
+          };
+        }
       } catch (e) {
         return null;
       }
@@ -76,8 +98,104 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authPromptMessage, setAuthPromptMessage] = useState<string | undefined>(undefined);
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
+  const [showTelegramModal, setShowTelegramModal] = useState<boolean>(false);
   const [showPrayerModal, setShowPrayerModal] = useState<boolean>(false);
   const [showDailyWisdomModal, setShowDailyWisdomModal] = useState<boolean>(false);
+
+  // Realtime Firebase Auth & Firestore Listeners + Cloud SQL Books Sync
+  useEffect(() => {
+    // 0. Initial load from Cloud SQL Database (loads all Telegram & server books)
+    fetch('/api/db/books')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((dbBooks) => {
+        if (Array.isArray(dbBooks) && dbBooks.length > 0) {
+          setBooks((prev) => {
+            const merged = [...dbBooks];
+            for (const b of prev) {
+              if (!merged.some((m) => m.id === b.id)) {
+                merged.push(b);
+              }
+            }
+            return merged;
+          });
+        }
+      })
+      .catch((err) => console.warn('Could not fetch books from Cloud SQL:', err));
+
+    // 1. Firebase Auth state listener
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const profile = await syncUserProfile(firebaseUser);
+          if (profile) {
+            setCurrentUser(profile);
+          }
+        } catch (e) {
+          console.error('Error syncing user profile from Firestore:', e);
+        }
+      }
+    });
+
+    // 2. Realtime Books from Firestore
+    const unsubscribeBooks = subscribeToBooks((liveBooks) => {
+      if (liveBooks && liveBooks.length > 0) {
+        setBooks((prev) => {
+          const merged = [...liveBooks];
+          for (const initB of INITIAL_BOOKS) {
+            if (!merged.some((b) => b.id === initB.id)) {
+              merged.push(initB);
+            }
+          }
+          return merged;
+        });
+      }
+    });
+
+    // 3. Realtime Fatwa Questions from Firestore
+    const unsubscribeFatwas = subscribeToFatwas((liveFatwas) => {
+      if (liveFatwas && liveFatwas.length > 0) {
+        const formatted: FatwaItem[] = liveFatwas.map((f) => ({
+          id: f.id,
+          fatwaNumber: `FTW-${f.id.slice(-6)}`,
+          titleMm: f.questionMm.slice(0, 60) + (f.questionMm.length > 60 ? '...' : ''),
+          category: f.category,
+          categoryMm:
+            f.category === 'ibadah'
+              ? 'အိဗာဒသ် (နမားဇ်နှင့် သန့်ရှင်းရေး)'
+              : f.category === 'roza'
+              ? 'ရမ်ဇာန်နှင့် ဥပုသ်သီလ'
+              : f.category === 'zakat'
+              ? 'ဇကာသ်နှင့် စီးပွားရေး/အတိုး'
+              : f.category === 'nikah'
+              ? 'နိကာဟ်နှင့် မိသားစုရေးရာ'
+              : 'ဆေးဝါးနှင့် ခေတ်ပေါ်ပြဿနာများ',
+          questioner: f.authorName,
+          questionMm: f.questionMm,
+          answerMm: f.answerMm || 'ဒါရုလ် အိဖ်သာဟ် ဓမ္မသတ်ကော်မတီက စိစစ်ဆဲ ဖြစ်ပါသည်။ တရားတော်နှင့်အညီ ဆုံးဖြတ်ချက်ကို မကြာမီ ထုတ်ပြန်ပေးပါမည်။',
+          referencesMm: f.references ? [f.references] : ['ဒါရုလ် အိဖ်သာဟ် မှတ်တမ်းအမှတ် ' + f.id],
+          muftiOrBoard: f.answeredBy || 'ဒါရုလ် အိဖ်သာဟ် စိစစ်ရေးဘုတ်အဖွဲ့',
+          dateMm: 'လတ်တလော',
+          views: 1,
+        }));
+
+        setFatwas((prev) => {
+          const merged = [...formatted];
+          for (const initF of INITIAL_FATWAS) {
+            if (!merged.some((item) => item.id === initF.id)) {
+              merged.push(initF);
+            }
+          }
+          return merged;
+        });
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeBooks();
+      unsubscribeFatwas();
+    };
+  }, []);
 
   // Sync state to LocalStorage
   useEffect(() => {
@@ -95,6 +213,16 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('alhikmah_user', JSON.stringify(currentUser));
+      if (currentUser.uid) {
+        saveUserProgressToFirestore(
+          currentUser.uid,
+          currentUser.readingHistory,
+          currentUser.savedBookmarks || [],
+          currentUser.notes || []
+        ).catch((err) => {
+          console.warn('Failed to sync user progress to Firestore:', err);
+        });
+      }
     } else {
       localStorage.removeItem('alhikmah_user');
     }
@@ -106,15 +234,26 @@ export default function App() {
     setShowAuthModal(true);
   };
 
-  // Add Book / PDF
-  const handleAddBook = (newBook: BookItem) => {
+  // Add Book / PDF with Firestore persistence
+  const handleAddBook = async (newBook: BookItem) => {
     setBooks((prev) => [newBook, ...prev]);
-    // Automatically open the reader for the newly added book
     setReadingBook(newBook);
+
+    if (auth.currentUser) {
+      try {
+        await saveBookToFirestore(
+          newBook,
+          auth.currentUser.uid,
+          currentUser?.displayName || currentUser?.name || auth.currentUser.displayName || 'Al-Hikmah Member'
+        );
+      } catch (e) {
+        console.warn('Failed to sync uploaded book to Firestore:', e);
+      }
+    }
   };
 
-  // Submit Fatwa Question
-  const handleSubmitFatwaQuestion = (q: {
+  // Submit Fatwa Question with Firestore persistence
+  const handleSubmitFatwaQuestion = async (q: {
     title: string;
     category: string;
     questionText: string;
@@ -146,6 +285,18 @@ export default function App() {
     };
 
     setFatwas((prev) => [newFatwa, ...prev]);
+
+    try {
+      await submitFatwaQuestionToFirestore(
+        q.questionText,
+        q.category,
+        q.name,
+        currentUser?.email,
+        currentUser?.uid || currentUser?.id
+      );
+    } catch (e) {
+      console.error('Failed to save fatwa to Firestore:', e);
+    }
   };
 
   // Update Bookmark in User Profile
@@ -156,14 +307,15 @@ export default function App() {
         return null;
       }
 
-      const currentBook = books.find((b) => b.id === bookId);
+      const currentBook = (books || []).find((b) => b.id === bookId);
       const bookTitle = currentBook ? currentBook.titleMm : 'စာအုပ်';
 
-      const existingIndex = prevUser.bookmarks.findIndex(
+      const bookmarksList = prevUser.bookmarks || [];
+      const existingIndex = bookmarksList.findIndex(
         (b) => b.bookId === bookId && b.page === page
       );
 
-      let updatedBookmarks = [...prevUser.bookmarks];
+      let updatedBookmarks = [...bookmarksList];
       if (existingIndex >= 0) {
         // Remove bookmark
         updatedBookmarks.splice(existingIndex, 1);
@@ -193,7 +345,7 @@ export default function App() {
         return null;
       }
 
-      const currentBook = books.find((b) => b.id === bookId);
+      const currentBook = (books || []).find((b) => b.id === bookId);
       const bookTitle = currentBook ? currentBook.titleMm : 'စာအုပ်';
 
       const newNote = {
@@ -205,9 +357,10 @@ export default function App() {
         createdAt: new Date().toLocaleDateString('en-GB'),
       };
 
+      const currentNotes = prevUser.personalNotes || [];
       return {
         ...prevUser,
-        personalNotes: [newNote, ...prevUser.personalNotes],
+        personalNotes: [newNote, ...currentNotes],
       };
     });
   }, [books]);
@@ -217,17 +370,17 @@ export default function App() {
     setCurrentUser((prevUser) => {
       if (!prevUser) return null;
 
-      // Guard: If reading history already shows this page as lastPage, return existing reference
-      const existing = prevUser.readingHistory.find((h) => h.bookId === bookId);
+      const historyList = prevUser.readingHistory || [];
+      const existing = historyList.find((h) => h.bookId === bookId);
       if (existing && existing.lastPage === page) {
         return prevUser;
       }
 
-      const currentBook = books.find((b) => b.id === bookId);
+      const currentBook = (books || []).find((b) => b.id === bookId);
       const bookTitle = currentBook ? currentBook.titleMm : (existing?.bookTitle || 'စာအုပ်');
       const totalPages = currentBook ? currentBook.totalPages : (existing?.totalPages || 1);
 
-      const filtered = prevUser.readingHistory.filter((h) => h.bookId !== bookId);
+      const filtered = historyList.filter((h) => h.bookId !== bookId);
       const updatedHistory = [
         {
           bookId,
@@ -248,7 +401,7 @@ export default function App() {
 
   // Open book directly to bookmarked page
   const handleOpenBookFromBookmark = (bookId: string, page: number) => {
-    const targetBook = books.find((b) => b.id === bookId);
+    const targetBook = (books || []).find((b) => b.id === bookId);
     if (targetBook) {
       setReadingBook(targetBook);
     }
@@ -274,6 +427,7 @@ export default function App() {
         }}
         onOpenUploadModal={() => setShowUploadModal(true)}
         onOpenDailyWisdom={() => setShowDailyWisdomModal(true)}
+        onOpenTelegramSync={() => setShowTelegramModal(true)}
       />
 
       {/* 3. Main Workspace Container */}
@@ -392,7 +546,14 @@ export default function App() {
             setShowAuthModal(false);
             setShowDailyWisdomModal(true);
           }}
-          onLogout={() => setCurrentUser(null)}
+          onLogout={async () => {
+            try {
+              await signOutUser();
+            } catch (e) {
+              console.error(e);
+            }
+            setCurrentUser(null);
+          }}
           onClose={() => {
             setShowAuthModal(false);
             setAuthPromptMessage(undefined);
@@ -426,6 +587,32 @@ export default function App() {
           currentUser={currentUser}
           onClose={() => setShowDailyWisdomModal(false)}
           isModal={true}
+        />
+      )}
+
+      {/* MODAL 6: Telegram Channel Sync Modal */}
+      {showTelegramModal && (
+        <TelegramSyncModal
+          onClose={() => setShowTelegramModal(false)}
+          onBookSynced={(newBook) => {
+            setBooks((prev) => {
+              if (prev.some((b) => b.id === newBook.id)) return prev;
+              return [newBook, ...prev];
+            });
+            // If authenticated, sync to Firestore
+            if (auth.currentUser) {
+              saveBookToFirestore(
+                newBook,
+                auth.currentUser.uid,
+                currentUser?.displayName || currentUser?.name || auth.currentUser.displayName || 'Member'
+              ).catch((err) => {
+                console.warn('Failed to sync telegram book to Firestore:', err);
+              });
+            }
+          }}
+          onOpenBook={(book) => {
+            setReadingBook(book);
+          }}
         />
       )}
     </div>

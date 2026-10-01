@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   ChevronLeft,
@@ -18,7 +18,7 @@ import {
   Edit3,
   Check,
 } from 'lucide-react';
-import { BookItem, UserProfile } from '../types';
+import { BookItem, BookChapter, UserProfile } from '../types';
 import { toMyanmarDigits } from '../utils/islamicTimes';
 
 interface BookReaderModalProps {
@@ -51,7 +51,31 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
   const [showNoteDrawer, setShowNoteDrawer] = useState<boolean>(false);
   const [noteSavedSuccess, setNoteSavedSuccess] = useState<boolean>(false);
 
-  const totalPages = book.totalPages || book.chapters.length || 1;
+  // Safely ensure chapters array exists and is never undefined
+  const chapters: BookChapter[] = useMemo(() => {
+    if (book.chapters && Array.isArray(book.chapters) && book.chapters.length > 0) {
+      return book.chapters;
+    }
+    return [
+      {
+        id: 'ch-1',
+        titleMm: 'မိတ်ဆက်နှင့် အမှာစာ',
+        titleAr: book.titleAr || undefined,
+        pageNumber: 1,
+        content: book.descriptionMm || `${book.titleMm} စာအုပ်၏ မိတ်ဆက်အကျဉ်းချုပ် ဖြစ်ပါသည်။`,
+      },
+      {
+        id: 'ch-2',
+        titleMm: 'အဓိက တရားဒေသနာနှင့် အကြောင်းအရာ',
+        pageNumber: Math.max(2, Math.min(book.totalPages || 2, 2)),
+        content: book.descriptionMm
+          ? `${book.descriptionMm}\n\nဤစာအုပ်အား Al-Hikmah စာကြည့်တိုက်တွင် ဖတ်ရှုလေ့လာနိုင်ပါသည်။`
+          : 'ဤစာအုပ်၏ အဓိက အနှစ်ချုပ်များကို စတင်ဖတ်ရှုနိုင်ပါသည်။',
+      },
+    ];
+  }, [book]);
+
+  const totalPages = book.totalPages || chapters.length || 1;
 
   // Stable ref for onUpdateHistory to prevent dependency-driven re-render loops
   const onUpdateHistoryRef = useRef(onUpdateHistory);
@@ -71,9 +95,9 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
 
   // Find chapter for current page
   const currentChapter =
-    book.chapters.find((ch) => ch.pageNumber === currentPage) ||
-    book.chapters[Math.min(currentPage - 1, book.chapters.length - 1)] ||
-    book.chapters[0];
+    chapters.find((ch: BookChapter) => ch.pageNumber === currentPage) ||
+    chapters[Math.min(currentPage - 1, chapters.length - 1)] ||
+    chapters[0];
 
   const handleNextPage = () => {
     if (currentPage < totalPages) {
@@ -281,7 +305,7 @@ export const BookReaderModal: React.FC<BookReaderModalProps> = ({
               </div>
 
               <div className="space-y-1">
-                {book.chapters.map((ch, idx) => (
+                {chapters.map((ch: BookChapter, idx: number) => (
                   <button
                     key={ch.id}
                     onClick={() => {

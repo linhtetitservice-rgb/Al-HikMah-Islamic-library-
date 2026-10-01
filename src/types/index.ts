@@ -91,10 +91,15 @@ export interface BookItem {
   language: 'my' | 'ar' | 'both';
   chapters: BookChapter[];
   pdfUrl?: string; // If user uploaded a PDF or embedded
+  fileData?: string; // Base64 or raw file data
   isUserUploaded?: boolean;
+  uploaderId?: string;
+  uploaderName?: string;
   publishedYear?: string;
   readCount: number;
   rating: number;
+  telegramChannel?: string;
+  telegramPostId?: number | string;
 }
 
 export interface FatwaItem {
@@ -115,11 +120,17 @@ export interface FatwaItem {
 
 export interface UserProfile {
   id: string;
+  uid?: string;
   name: string;
+  displayName?: string;
   email: string;
-  role: 'member' | 'student' | 'scholar';
+  role: 'member' | 'student' | 'scholar' | 'admin';
   avatarInitials: string;
+  photoURL?: string;
   joinDate: string;
+  isPremium?: boolean;
+  savedBookmarks?: string[];
+  notes?: any[];
   bookmarks: {
     bookId: string;
     bookTitle: string;

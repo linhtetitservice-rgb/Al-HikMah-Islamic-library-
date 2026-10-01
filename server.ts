@@ -2,6 +2,19 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getBooks, insertBook } from './src/db/books.ts';
+import { getFatwas, insertFatwa } from './src/db/fatwas.ts';
+import { getOrCreateUser } from './src/db/users.ts';
+import {
+  getUserReadingData,
+  toggleBookmark,
+  updateReadingProgress,
+  addPersonalNote,
+} from './src/db/userActivities.ts';
+import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { seedInitialDataIfNeeded } from './src/db/seed.ts';
+import { parseTelegramBookUpdate, TelegramUpdate } from './src/services/telegramService.ts';
+import { adminDb } from './src/lib/firebase-admin.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -425,6 +438,430 @@ async function startServer() {
     } catch (err: any) {
       console.error('Error fetching calendar:', err);
       return res.status(500).json({ error: 'Failed to fetch calendar', message: err?.message });
+    }
+  });
+
+  // ==========================================
+  // CLOUD SQL POSTGRESQL DATABASE API ROUTES
+  // ==========================================
+
+  // 4. Fetch Books from Cloud SQL
+  app.get('/api/db/books', async (_req, res) => {
+    try {
+      await seedInitialDataIfNeeded();
+      const booksList = await getBooks();
+      res.json(booksList);
+    } catch (error: any) {
+      console.error('Failed to fetch books from Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch books from Cloud SQL' });
+    }
+  });
+
+  // 5. Insert Book into Cloud SQL
+  app.post('/api/db/books', async (req, res) => {
+    try {
+      const bookData = req.body;
+      const inserted = await insertBook(bookData, req.body.uploaderId, req.body.uploaderName);
+      res.json(inserted);
+    } catch (error: any) {
+      console.error('Failed to insert book into Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to insert book into Cloud SQL' });
+    }
+  });
+
+  // 6. Fetch Fatwas from Cloud SQL
+  app.get('/api/db/fatwas', async (_req, res) => {
+    try {
+      await seedInitialDataIfNeeded();
+      const fatwasList = await getFatwas();
+      res.json(fatwasList);
+    } catch (error: any) {
+      console.error('Failed to fetch fatwas from Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch fatwas from Cloud SQL' });
+    }
+  });
+
+  // 7. Insert Fatwa into Cloud SQL
+  app.post('/api/db/fatwas', async (req, res) => {
+    try {
+      const fatwaData = req.body;
+      const inserted = await insertFatwa(fatwaData, req.body.authorUid);
+      res.json(inserted);
+    } catch (error: any) {
+      console.error('Failed to insert fatwa into Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to insert fatwa into Cloud SQL' });
+    }
+  });
+
+  // 8. User Profile Synchronization with Cloud SQL (Authenticated)
+  app.post('/api/db/user/sync', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { uid, email, name, role, photoUrl } = req.body;
+      const user = await getOrCreateUser(
+        req.user.uid || uid,
+        req.user.email || email || 'member@alhikmah.org',
+        name || 'Member',
+        role || 'student',
+        photoUrl
+      );
+      res.json(user);
+    } catch (error: any) {
+      console.error('Failed to sync user with Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to sync user' });
+    }
+  });
+
+  // 9. User Reading Data from Cloud SQL (Authenticated)
+  app.get('/api/db/user/activity', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const data = await getUserReadingData(req.user.uid);
+      res.json(data);
+    } catch (error: any) {
+      console.error('Failed to fetch user activity from Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch activity' });
+    }
+  });
+
+  // 10. Bookmark Toggle (Authenticated)
+  app.post('/api/db/user/bookmark', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { bookId, bookTitle, page, chapterTitle } = req.body;
+      const result = await toggleBookmark(req.user.uid, bookId, bookTitle, page, chapterTitle);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Failed to toggle bookmark in Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to toggle bookmark' });
+    }
+  });
+
+  // 11. Reading Progress Update (Authenticated)
+  app.post('/api/db/user/progress', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { bookId, bookTitle, lastPage, totalPages } = req.body;
+      const result = await updateReadingProgress(req.user.uid, bookId, bookTitle, lastPage, totalPages);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Failed to update reading progress in Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to update progress' });
+    }
+  });
+
+  // 12. Add Personal Note (Authenticated)
+  app.post('/api/db/user/note', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { bookId, bookTitle, page, text } = req.body;
+      const result = await addPersonalNote(req.user.uid, bookId, bookTitle, page, text);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Failed to add personal note in Cloud SQL:', error);
+      res.status(500).json({ error: error.message || 'Failed to add note' });
+    }
+  });
+
+  // ==========================================
+  // TELEGRAM CHANNEL & BOT SYNC API ROUTES
+  // ==========================================
+  const recentTelegramEvents: any[] = [];
+
+  // Telegram Live Webhook Endpoint
+  app.post('/api/telegram/webhook', async (req, res) => {
+    try {
+      const update: TelegramUpdate = req.body;
+      console.log('Received Telegram Update:', update?.update_id);
+
+      const parsedBook = parseTelegramBookUpdate(update);
+      if (parsedBook) {
+        // Save to Cloud SQL
+        const inserted = await insertBook(
+          parsedBook,
+          'telegram-bot',
+          parsedBook.telegramChannel || 'Telegram Channel'
+        );
+
+        const fullBook: any = {
+          ...parsedBook,
+          ...(inserted || {}),
+          chapters: parsedBook.chapters || [],
+        };
+
+        // Sync to Firestore using Admin SDK (server privileges, no client rules barriers)
+        try {
+          await adminDb.collection('books').doc(fullBook.id).set({
+            id: fullBook.id,
+            titleMm: fullBook.titleMm,
+            titleAr: fullBook.titleAr || '',
+            titleEn: fullBook.titleEn || '',
+            authorMm: fullBook.authorMm,
+            authorAr: fullBook.authorAr || '',
+            category: fullBook.category,
+            categoryMm: fullBook.categoryMm,
+            descriptionMm: fullBook.descriptionMm || '',
+            coverColor: fullBook.coverColor,
+            totalPages: fullBook.totalPages,
+            isMemberOnly: fullBook.isMemberOnly,
+            language: fullBook.language,
+            publishedYear: fullBook.publishedYear || new Date().getFullYear().toString(),
+            readCount: fullBook.readCount || 0,
+            rating: fullBook.rating || 5.0,
+            isUserUploaded: true,
+            uploaderId: 'telegram-bot',
+            uploaderName: parsedBook.telegramChannel || 'Telegram Channel',
+            telegramChannel: fullBook.telegramChannel || '',
+            telegramPostId: String(fullBook.telegramPostId || ''),
+            createdAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (fErr) {
+          console.warn('Admin sync to Firestore skipped/failed:', fErr);
+        }
+
+        recentTelegramEvents.unshift({
+          timestamp: Date.now(),
+          bookId: parsedBook.id,
+          title: parsedBook.titleMm,
+          channel: parsedBook.telegramChannel,
+          document: update.channel_post?.document?.file_name || 'Book File',
+        });
+        if (recentTelegramEvents.length > 50) recentTelegramEvents.pop();
+
+        console.log(`Telegram book successfully synced: "${parsedBook.titleMm}"`);
+        return res.json({ ok: true, synced: true, book: fullBook });
+      }
+
+      return res.json({ ok: true, synced: false, message: 'No book document or text detected in post' });
+    } catch (error: any) {
+      console.error('Error handling Telegram webhook:', error);
+      return res.status(500).json({ error: error.message || 'Telegram webhook handling failed' });
+    }
+  });
+
+  // Telegram Integration Status & Info
+  app.get('/api/telegram/status', (_req, res) => {
+    res.json({
+      hasToken: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+      channelConfigured: Boolean(process.env.TELEGRAM_CHANNEL_ID),
+      recentEvents: recentTelegramEvents,
+    });
+  });
+
+  async function syncTelegramFromBot() {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) return [];
+
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates`);
+      if (!res.ok) return [];
+      const data: any = await res.json();
+      if (!data.ok || !Array.isArray(data.result) || data.result.length === 0) {
+        return [];
+      }
+
+      const importedBooks: any[] = [];
+      let maxUpdateId = 0;
+
+      for (const update of data.result) {
+        if (update.update_id > maxUpdateId) maxUpdateId = update.update_id;
+        const parsedBook = parseTelegramBookUpdate(update);
+        if (parsedBook) {
+          const inserted = await insertBook(
+            parsedBook,
+            'telegram-bot',
+            parsedBook.telegramChannel || '@alhikmahislby'
+          );
+          const fullBook: any = {
+            ...parsedBook,
+            ...(inserted || {}),
+            chapters: parsedBook.chapters || [],
+          };
+          importedBooks.push(fullBook);
+
+          try {
+            await adminDb.collection('books').doc(fullBook.id).set({
+              id: fullBook.id,
+              titleMm: fullBook.titleMm,
+              titleAr: fullBook.titleAr || '',
+              titleEn: fullBook.titleEn || '',
+              authorMm: fullBook.authorMm,
+              authorAr: fullBook.authorAr || '',
+              category: fullBook.category,
+              categoryMm: fullBook.categoryMm,
+              descriptionMm: fullBook.descriptionMm || '',
+              coverColor: fullBook.coverColor,
+              totalPages: fullBook.totalPages,
+              isMemberOnly: fullBook.isMemberOnly,
+              language: fullBook.language,
+              publishedYear: fullBook.publishedYear || new Date().getFullYear().toString(),
+              readCount: fullBook.readCount || 0,
+              rating: fullBook.rating || 5.0,
+              isUserUploaded: true,
+              uploaderId: 'telegram-bot',
+              uploaderName: parsedBook.telegramChannel || 'Telegram Channel',
+              telegramChannel: fullBook.telegramChannel || '',
+              telegramPostId: String(fullBook.telegramPostId || ''),
+              createdAt: new Date().toISOString(),
+            }, { merge: true });
+          } catch (fErr) {
+            // Optional firestore sync
+          }
+
+          recentTelegramEvents.unshift({
+            timestamp: Date.now(),
+            bookId: parsedBook.id,
+            title: parsedBook.titleMm,
+            channel: parsedBook.telegramChannel,
+            document: update.channel_post?.document?.file_name || update.message?.document?.file_name || 'Book File',
+          });
+          if (recentTelegramEvents.length > 50) recentTelegramEvents.pop();
+        }
+      }
+
+      if (maxUpdateId > 0) {
+        await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${maxUpdateId + 1}`);
+      }
+
+      return importedBooks;
+    } catch (err) {
+      console.error('Telegram polling error:', err);
+      return [];
+    }
+  }
+
+  // Trigger manual sync or check
+  app.post('/api/telegram/sync-updates', async (_req, res) => {
+    try {
+      const imported = await syncTelegramFromBot();
+      res.json({
+        success: true,
+        message: `Telegram မှ စာအုပ် (${imported.length}) အုပ် စစ်ဆေးတွေ့ရှိပြီး စာကြည့်တိုက်သို့ ထည့်သွင်းပြီးပါပြီ`,
+        importedCount: imported.length,
+        books: imported,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Telegram sync failed' });
+    }
+  });
+
+  // Background interval polling for new Telegram posts every 25 seconds
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    setInterval(() => {
+      syncTelegramFromBot().catch(() => {});
+    }, 25000);
+  }
+
+  // Test / Simulate Telegram Channel Post (1-Click Test for User)
+  app.post('/api/telegram/simulate-post', async (req, res) => {
+    try {
+      const {
+        title = 'အစ္စလာမ့် သာသနာရေးရာ နေ့စဉ်ကျင့်ဝတ် လက်စွဲတော်',
+        author = 'မော်လာနာ နူရ်မုဟမ္မဒ်',
+        category = 'fiqh',
+        fileName = 'Islamic_Daily_Ethics_Fiqh.pdf',
+        channelName = '@alhikmah_islamic_books',
+        pages = 48,
+        description = 'ဤစာအုပ်သည် နေ့စဉ် အိဗာဒသ်၊ သန့်ရှင်းရေးနှင့် နမားဇ်ဆိုင်ရာ အရေးကြီး စည်းမျဉ်းများကို မြန်မာဘာသာဖြင့် အသေးစိတ် ရှင်းလင်းထားသော လက်စွဲစာအုပ် ဖြစ်ပါသည်။',
+      } = req.body || {};
+
+      const simulatedUpdate: TelegramUpdate = {
+        update_id: Math.floor(100000 + Math.random() * 900000),
+        channel_post: {
+          message_id: Math.floor(100 + Math.random() * 9000),
+          chat: {
+            id: -1001889922001,
+            title: 'Al-Hikmah Official Telegram Channel',
+            username: channelName.replace('@', ''),
+            type: 'channel',
+          },
+          date: Math.floor(Date.now() / 1000),
+          caption: `စာအုပ်အမည်: ${title}\nစာရေးသူ: ${author}\nကဏ္ဍ: ${category}\nစာမျက်နှာ: ${pages}\n\nအကျဉ်းချုပ်: ${description}`,
+          document: {
+            file_id: `BQACAgQAAxkBAAIC_${Date.now()}`,
+            file_unique_id: `AgAD_${Date.now()}`,
+            file_name: fileName,
+            mime_type: 'application/pdf',
+            file_size: 3450000,
+          },
+        },
+      };
+
+      const parsedBook = parseTelegramBookUpdate(simulatedUpdate);
+      if (parsedBook) {
+        const inserted = await insertBook(
+          parsedBook,
+          'telegram-simulated',
+          channelName
+        );
+
+        const fullBook: any = {
+          ...parsedBook,
+          ...(inserted || {}),
+          chapters: parsedBook.chapters || [],
+        };
+
+        // Sync to Firestore using Admin SDK
+        try {
+          await adminDb.collection('books').doc(fullBook.id).set({
+            id: fullBook.id,
+            titleMm: fullBook.titleMm,
+            titleAr: fullBook.titleAr || '',
+            titleEn: fullBook.titleEn || '',
+            authorMm: fullBook.authorMm,
+            authorAr: fullBook.authorAr || '',
+            category: fullBook.category,
+            categoryMm: fullBook.categoryMm,
+            descriptionMm: fullBook.descriptionMm || '',
+            coverColor: fullBook.coverColor,
+            totalPages: fullBook.totalPages,
+            isMemberOnly: fullBook.isMemberOnly,
+            language: fullBook.language,
+            publishedYear: fullBook.publishedYear || new Date().getFullYear().toString(),
+            readCount: fullBook.readCount || 0,
+            rating: fullBook.rating || 5.0,
+            isUserUploaded: true,
+            uploaderId: 'telegram-simulated',
+            uploaderName: channelName,
+            telegramChannel: fullBook.telegramChannel || '',
+            telegramPostId: String(fullBook.telegramPostId || ''),
+            createdAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (fErr) {
+          console.warn('Admin sync to Firestore skipped/failed:', fErr);
+        }
+
+        recentTelegramEvents.unshift({
+          timestamp: Date.now(),
+          bookId: parsedBook.id,
+          title: parsedBook.titleMm,
+          channel: channelName,
+          document: fileName,
+          simulated: true,
+        });
+        if (recentTelegramEvents.length > 50) recentTelegramEvents.pop();
+
+        return res.json({
+          success: true,
+          message: 'စာအုပ်အား Telegram Channel မှ Web Library သို့ အောင်မြင်စွာ တင်သွင်းပြီးပါပြီ',
+          book: fullBook,
+        });
+      }
+
+      return res.status(400).json({ error: 'Failed to parse simulated book update' });
+    } catch (error: any) {
+      console.error('Error in simulate-post:', error);
+      return res.status(500).json({ error: error.message || 'Simulation failed' });
     }
   });
 

@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with display information, role, reading progress, and membership status.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 150 },
+        "photoURL": { "type": "string", "maxLength": 2000 },
+        "role": { "type": "string", "enum": ["member", "student", "scholar", "admin"] },
+        "isPremium": { "type": "boolean" },
+        "savedBookmarks": { "type": "array", "description": "List of book IDs bookmarked by the user" },
+        "readingHistory": { "type": "array", "description": "List of reading progress records for books" },
+        "notes": { "type": "array", "description": "List of user study notes and reflections" },
+        "bookmarks": { "type": "array", "description": "List of bookmark objects" },
+        "personalNotes": { "type": "array", "description": "List of personal note objects" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "email", "role", "isPremium", "createdAt"]
+    },
+    "Book": {
+      "title": "Book",
+      "description": "Islamic literature book or PDF document in the library.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "titleMm": { "type": "string", "maxLength": 300 },
+        "titleAr": { "type": "string", "maxLength": 300 },
+        "titleEn": { "type": "string", "maxLength": 300 },
+        "authorMm": { "type": "string", "maxLength": 200 },
+        "authorAr": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 50 },
+        "categoryMm": { "type": "string", "maxLength": 100 },
+        "descriptionMm": { "type": "string", "maxLength": 2000 },
+        "coverColor": { "type": "string", "maxLength": 100 },
+        "totalPages": { "type": "number" },
+        "isMemberOnly": { "type": "boolean" },
+        "language": { "type": "string", "enum": ["my", "ar", "both"] },
+        "publishedYear": { "type": "string", "maxLength": 10 },
+        "readCount": { "type": "number" },
+        "rating": { "type": "number" },
+        "isUserUploaded": { "type": "boolean" },
+        "uploaderId": { "type": "string", "maxLength": 128 },
+        "uploaderName": { "type": "string", "maxLength": 100 },
+        "fileData": { "type": "string", "maxLength": 15000000 },
+        "telegramChannel": { "type": "string", "maxLength": 150 },
+        "telegramPostId": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "titleMm", "authorMm", "category", "totalPages", "isMemberOnly", "readCount", "createdAt"]
+    },
+    "Bookmark": {
+      "title": "Bookmark",
+      "description": "User book reading progress, last page, and favorite bookmarks.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "bookId": { "type": "string", "maxLength": 128 },
+        "bookTitle": { "type": "string", "maxLength": 300 },
+        "lastPage": { "type": "number" },
+        "totalPages": { "type": "number" },
+        "percentage": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "bookId", "bookTitle", "lastPage", "totalPages", "updatedAt"]
+    },
+    "PersonalNote": {
+      "title": "PersonalNote",
+      "description": "Personal reflection or reading note saved by a user for a specific book.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "bookId": { "type": "string", "maxLength": 128 },
+        "pageNumber": { "type": "number" },
+        "noteContent": { "type": "string", "maxLength": 3000 },
+        "quoteSnippet": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "bookId", "noteContent", "createdAt"]
+    },
+    "FatwaQuestion": {
+      "title": "FatwaQuestion",
+      "description": "Islamic religious question submitted to scholars for fatwa consultation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "questionMm": { "type": "string", "maxLength": 3000 },
+        "category": { "type": "string", "maxLength": 50 },
+        "authorName": { "type": "string", "maxLength": 100 },
+        "authorEmail": { "type": "string", "maxLength": 150 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "answered", "archived"] },
+        "answerMm": { "type": "string", "maxLength": 6000 },
+        "answeredBy": { "type": "string", "maxLength": 150 },
+        "references": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" },
+        "answeredAt": { "type": "string" }
+      },
+      "required": ["id", "questionMm", "category", "authorName", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents stored by user UID."
+    },
+    "/users/{userId}/bookmarks/{bookmarkId}": {
+      "schema": "Bookmark",
+      "description": "User reading history and page bookmarks."
+    },
+    "/users/{userId}/notes/{noteId}": {
+      "schema": "PersonalNote",
+      "description": "User private study notes and reflections."
+    },
+    "/books/{bookId}": {
+      "schema": "Book",
+      "description": "Library books and community-contributed literature."
+    },
+    "/fatwaQuestions/{questionId}": {
+      "schema": "FatwaQuestion",
+      "description": "Community Islamic religious questions and answered fatwas."
+    }
+  }
+}
