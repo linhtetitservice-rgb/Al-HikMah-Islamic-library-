@@ -8,6 +8,7 @@ import {
   Sparkles,
   Coins,
   Layers,
+  Headphones,
   X,
   RotateCcw,
   Check,
@@ -50,6 +51,12 @@ const CATEGORY_META: Record<
     arLabel: 'جميع الكتب والمخطوطات',
     descriptionMm: 'စာအုပ်အားလုံး ကြည့်ရှုရန်',
     accentColor: 'text-stone-700',
+  },
+  audio: {
+    icon: Headphones,
+    arLabel: 'التلاوات والمحاضرات الصوتية',
+    descriptionMm: 'ကုရ်အာန်နှင့် တရားတော် အသံဖိုင်များ',
+    accentColor: 'text-violet-700',
   },
   quran: {
     icon: BookOpen,

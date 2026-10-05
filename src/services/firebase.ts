@@ -276,6 +276,12 @@ export function subscribeToBooks(onBooksReceived: (books: BookItem[]) => void) {
           rating: data.rating || 5.0,
           isUserUploaded: data.isUserUploaded ?? false,
           fileData: data.fileData,
+          pdfUrl: data.pdfUrl,
+          audioUrl: data.audioUrl,
+          mediaType: data.mediaType || (data.audioUrl ? 'audio' : 'book'),
+          audioDuration: data.audioDuration,
+          reciterOrSpeakerMm: data.reciterOrSpeakerMm,
+          audioFileSize: data.audioFileSize,
           chapters: data.chapters || [],
           telegramChannel: data.telegramChannel,
           telegramPostId: data.telegramPostId,
@@ -293,33 +299,53 @@ export async function saveBookToFirestore(book: BookItem, uploaderUid: string, u
   const path = `books/${book.id}`;
   try {
     const bookRef = doc(db, 'books', book.id);
+    const parsedRating = typeof book.rating === 'number' ? book.rating : (parseFloat(String(book.rating)) || 5.0);
+    const parsedPages = typeof book.totalPages === 'number' ? book.totalPages : (parseInt(String(book.totalPages), 10) || 1);
+    const parsedReadCount = typeof book.readCount === 'number' ? book.readCount : (parseInt(String(book.readCount), 10) || 0);
+
     await setDoc(bookRef, {
       id: book.id,
-      titleMm: book.titleMm,
-      titleAr: book.titleAr || '',
-      titleEn: book.titleEn || '',
-      authorMm: book.authorMm,
-      authorAr: book.authorAr || '',
-      category: book.category,
-      categoryMm: book.categoryMm || '',
-      descriptionMm: book.descriptionMm || '',
-      coverColor: book.coverColor,
-      totalPages: book.totalPages,
-      isMemberOnly: book.isMemberOnly,
+      titleMm: (book.titleMm || 'အစ္စလာမ့်စာအုပ်').slice(0, 290),
+      titleAr: (book.titleAr || '').slice(0, 290),
+      titleEn: (book.titleEn || '').slice(0, 290),
+      authorMm: (book.authorMm || 'ဆရာတော်').slice(0, 190),
+      authorAr: (book.authorAr || '').slice(0, 190),
+      category: book.category || 'general',
+      categoryMm: book.categoryMm || 'အထွေထွေ အစ္စလာမ့်စာပေ',
+      descriptionMm: (book.descriptionMm || '').slice(0, 1950),
+      coverColor: book.coverColor || 'from-emerald-950 to-stone-900',
+      totalPages: parsedPages,
+      isMemberOnly: Boolean(book.isMemberOnly),
       language: book.language || 'my',
-      publishedYear: book.publishedYear || new Date().getFullYear().toString(),
-      readCount: book.readCount || 0,
-      rating: book.rating || 5.0,
+      publishedYear: String(book.publishedYear || new Date().getFullYear()),
+      readCount: parsedReadCount,
+      rating: Math.min(5, Math.max(0, parsedRating)),
       isUserUploaded: true,
       uploaderId: uploaderUid,
       uploaderName: uploaderName,
       fileData: book.fileData || '',
-      telegramChannel: book.telegramChannel || '',
-      telegramPostId: book.telegramPostId ? String(book.telegramPostId) : '',
+      pdfUrl: (book.pdfUrl || '').slice(0, 1950),
+      audioUrl: (book.audioUrl || '').slice(0, 1950),
+      mediaType: book.mediaType || (book.audioUrl ? 'audio' : 'book'),
+      audioDuration: (book.audioDuration || '').slice(0, 45),
+      reciterOrSpeakerMm: (book.reciterOrSpeakerMm || '').slice(0, 190),
+      audioFileSize: (book.audioFileSize || '').slice(0, 45),
+      telegramChannel: (book.telegramChannel || '').slice(0, 140),
+      telegramPostId: book.telegramPostId ? String(book.telegramPostId).slice(0, 90) : '',
       createdAt: new Date().toISOString(),
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, path);
+  }
+}
+
+export async function deleteBookFromFirestore(bookId: string): Promise<void> {
+  const path = `books/${bookId}`;
+  try {
+    const bookRef = doc(db, 'books', bookId);
+    await deleteDoc(bookRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
   }
 }
 

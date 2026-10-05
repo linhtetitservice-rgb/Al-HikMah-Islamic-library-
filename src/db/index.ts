@@ -1,13 +1,30 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.ts';
+import fs from 'fs';
 
 declare global {
   var _postgresPool: Pool | undefined;
 }
 
+export function isCloudSqlAvailable(): boolean {
+  if (!process.env.SQL_HOST) return false;
+  if (process.env.SQL_HOST.startsWith('/')) {
+    try {
+      if (!fs.existsSync(process.env.SQL_HOST)) {
+        return false;
+      }
+      const files = fs.readdirSync(process.env.SQL_HOST);
+      return files.some((f) => f.includes('.s.PGSQL'));
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 export const createPool = () => {
-  if (!global._postgresPool) {
+  if (!global._postgresPool && isCloudSqlAvailable()) {
     global._postgresPool = new Pool({
       host: process.env.SQL_HOST,
       user: process.env.SQL_USER,
@@ -25,4 +42,4 @@ export const createPool = () => {
 };
 
 const pool = createPool();
-export const db = drizzle(pool, { schema });
+export const db = pool ? drizzle(pool, { schema }) : (null as any);

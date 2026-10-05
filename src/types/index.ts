@@ -91,6 +91,11 @@ export interface BookItem {
   language: 'my' | 'ar' | 'both';
   chapters: BookChapter[];
   pdfUrl?: string; // If user uploaded a PDF or embedded
+  audioUrl?: string; // If user uploaded an audio file or MP3 URL
+  mediaType?: 'book' | 'audio' | 'pdf'; // Type of media resource
+  audioDuration?: string; // Formatted duration e.g. "04:30" or "45:12"
+  reciterOrSpeakerMm?: string; // ဟောကြားသူ / ရွတ်ဖတ်သူ ဆရာတော်
+  audioFileSize?: string; // e.g. "4.8 MB"
   fileData?: string; // Base64 or raw file data
   isUserUploaded?: boolean;
   uploaderId?: string;

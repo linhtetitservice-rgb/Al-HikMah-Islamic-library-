@@ -596,37 +596,42 @@ async function startServer() {
         const fullBook: any = {
           ...parsedBook,
           ...(inserted || {}),
+          rating: typeof (inserted as any)?.rating === 'string'
+            ? parseFloat((inserted as any).rating) || 5.0
+            : parsedBook.rating || 5.0,
           chapters: parsedBook.chapters || [],
         };
 
-        // Sync to Firestore using Admin SDK (server privileges, no client rules barriers)
-        try {
-          await adminDb.collection('books').doc(fullBook.id).set({
-            id: fullBook.id,
-            titleMm: fullBook.titleMm,
-            titleAr: fullBook.titleAr || '',
-            titleEn: fullBook.titleEn || '',
-            authorMm: fullBook.authorMm,
-            authorAr: fullBook.authorAr || '',
-            category: fullBook.category,
-            categoryMm: fullBook.categoryMm,
-            descriptionMm: fullBook.descriptionMm || '',
-            coverColor: fullBook.coverColor,
-            totalPages: fullBook.totalPages,
-            isMemberOnly: fullBook.isMemberOnly,
-            language: fullBook.language,
-            publishedYear: fullBook.publishedYear || new Date().getFullYear().toString(),
-            readCount: fullBook.readCount || 0,
-            rating: fullBook.rating || 5.0,
-            isUserUploaded: true,
-            uploaderId: 'telegram-bot',
-            uploaderName: parsedBook.telegramChannel || 'Telegram Channel',
-            telegramChannel: fullBook.telegramChannel || '',
-            telegramPostId: String(fullBook.telegramPostId || ''),
-            createdAt: new Date().toISOString(),
-          }, { merge: true });
-        } catch (fErr) {
-          console.warn('Admin sync to Firestore skipped/failed:', fErr);
+        // Sync to Firestore using Admin SDK if credentials exist
+        if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          try {
+            await adminDb.collection('books').doc(fullBook.id).set({
+              id: fullBook.id,
+              titleMm: fullBook.titleMm,
+              titleAr: fullBook.titleAr || '',
+              titleEn: fullBook.titleEn || '',
+              authorMm: fullBook.authorMm,
+              authorAr: fullBook.authorAr || '',
+              category: fullBook.category,
+              categoryMm: fullBook.categoryMm,
+              descriptionMm: fullBook.descriptionMm || '',
+              coverColor: fullBook.coverColor,
+              totalPages: fullBook.totalPages,
+              isMemberOnly: fullBook.isMemberOnly,
+              language: fullBook.language,
+              publishedYear: fullBook.publishedYear || new Date().getFullYear().toString(),
+              readCount: fullBook.readCount || 0,
+              rating: fullBook.rating || 5.0,
+              isUserUploaded: true,
+              uploaderId: 'telegram-bot',
+              uploaderName: parsedBook.telegramChannel || 'Telegram Channel',
+              telegramChannel: fullBook.telegramChannel || '',
+              telegramPostId: String(fullBook.telegramPostId || ''),
+              createdAt: new Date().toISOString(),
+            }, { merge: true });
+          } catch (fErr) {
+            // Optional server-side sync; client syncs with user auth
+          }
         }
 
         recentTelegramEvents.unshift({
@@ -808,37 +813,45 @@ async function startServer() {
         const fullBook: any = {
           ...parsedBook,
           ...(inserted || {}),
+          rating: typeof (inserted as any)?.rating === 'string'
+            ? parseFloat((inserted as any).rating) || 5.0
+            : parsedBook.rating || 5.0,
+          totalPages: typeof (inserted as any)?.totalPages === 'string'
+            ? parseInt((inserted as any).totalPages, 10) || parsedBook.totalPages
+            : parsedBook.totalPages || 30,
           chapters: parsedBook.chapters || [],
         };
 
-        // Sync to Firestore using Admin SDK
-        try {
-          await adminDb.collection('books').doc(fullBook.id).set({
-            id: fullBook.id,
-            titleMm: fullBook.titleMm,
-            titleAr: fullBook.titleAr || '',
-            titleEn: fullBook.titleEn || '',
-            authorMm: fullBook.authorMm,
-            authorAr: fullBook.authorAr || '',
-            category: fullBook.category,
-            categoryMm: fullBook.categoryMm,
-            descriptionMm: fullBook.descriptionMm || '',
-            coverColor: fullBook.coverColor,
-            totalPages: fullBook.totalPages,
-            isMemberOnly: fullBook.isMemberOnly,
-            language: fullBook.language,
-            publishedYear: fullBook.publishedYear || new Date().getFullYear().toString(),
-            readCount: fullBook.readCount || 0,
-            rating: fullBook.rating || 5.0,
-            isUserUploaded: true,
-            uploaderId: 'telegram-simulated',
-            uploaderName: channelName,
-            telegramChannel: fullBook.telegramChannel || '',
-            telegramPostId: String(fullBook.telegramPostId || ''),
-            createdAt: new Date().toISOString(),
-          }, { merge: true });
-        } catch (fErr) {
-          console.warn('Admin sync to Firestore skipped/failed:', fErr);
+        // Sync to Firestore using Admin SDK if credentials exist
+        if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          try {
+            await adminDb.collection('books').doc(fullBook.id).set({
+              id: fullBook.id,
+              titleMm: fullBook.titleMm,
+              titleAr: fullBook.titleAr || '',
+              titleEn: fullBook.titleEn || '',
+              authorMm: fullBook.authorMm,
+              authorAr: fullBook.authorAr || '',
+              category: fullBook.category,
+              categoryMm: fullBook.categoryMm,
+              descriptionMm: fullBook.descriptionMm || '',
+              coverColor: fullBook.coverColor,
+              totalPages: fullBook.totalPages,
+              isMemberOnly: fullBook.isMemberOnly,
+              language: fullBook.language,
+              publishedYear: fullBook.publishedYear || new Date().getFullYear().toString(),
+              readCount: fullBook.readCount || 0,
+              rating: fullBook.rating || 5.0,
+              isUserUploaded: true,
+              uploaderId: 'telegram-simulated',
+              uploaderName: channelName,
+              telegramChannel: fullBook.telegramChannel || '',
+              telegramPostId: String(fullBook.telegramPostId || ''),
+              createdAt: new Date().toISOString(),
+            }, { merge: true });
+          } catch (fErr) {
+            // Optional server-side sync; client syncs with user auth
+          }
         }
 
         recentTelegramEvents.unshift({

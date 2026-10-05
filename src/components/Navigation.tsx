@@ -1,6 +1,8 @@
 import React from 'react';
-import { BookOpen, Upload, User, LogIn, Sparkles, Send } from 'lucide-react';
+import { BookOpen, Upload, User, LogIn, Sparkles, Send, Headphones, Radio, ShieldCheck } from 'lucide-react';
 import { UserProfile } from '../types';
+import { useAudioPlayer } from '../context/AudioPlayerContext';
+import { isUserAdmin } from '../utils/auth';
 
 interface NavigationProps {
   activeTab: 'library' | 'fatwa' | 'zakat' | 'prayer';
@@ -21,6 +23,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenDailyWisdom,
   onOpenTelegramSync,
 }) => {
+  const { isPlaying, setIsPlayerVisible, resume } = useAudioPlayer();
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-stone-200 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -96,6 +99,24 @@ export const Navigation: React.FC<NavigationProps> = ({
             </button>
           )}
 
+          {/* Quick Audio Stream Launcher */}
+          <button
+            onClick={() => {
+              setIsPlayerVisible(true);
+              if (!isPlaying) resume();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 shadow-2xs ${
+              isPlaying
+                ? 'bg-amber-100 text-amber-950 border border-amber-300'
+                : 'bg-violet-50 text-violet-900 hover:bg-violet-100 border border-violet-200'
+            }`}
+            title="အသံလွှင့်ဌာန / ၂၄ နာရီ ကုရ်အာန် ရေဒီယို နားဆင်ရန်"
+          >
+            <Headphones className={`w-3.5 h-3.5 ${isPlaying ? 'text-amber-800 animate-pulse' : 'text-violet-700'}`} />
+            <span className="font-myanmar hidden md:inline">{isPlaying ? 'အသံလွှင့်နေဆဲ' : 'အသံလွှင့်ဌာန'}</span>
+            <span className="font-myanmar md:hidden">အသံ</span>
+          </button>
+
           {currentUser && onOpenDailyWisdom && (
             <button
               onClick={onOpenDailyWisdom}
@@ -107,14 +128,29 @@ export const Navigation: React.FC<NavigationProps> = ({
             </button>
           )}
 
-          <button
-            onClick={onOpenUploadModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors whitespace-nowrap shrink-0"
-          >
-            <Upload className="w-3.5 h-3.5 text-emerald-700" />
-            <span className="font-myanmar hidden sm:inline">စာအုပ်တင်ရန်</span>
-            <span className="font-myanmar sm:hidden">တင်ရန်</span>
-          </button>
+          {isUserAdmin(currentUser) ? (
+            <button
+              onClick={onOpenUploadModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors whitespace-nowrap shrink-0 shadow-2xs"
+              title="စာအုပ်နှင့် အသံဖိုင် တင်သွင်းရန် (Admin Authorized)"
+            >
+              <Upload className="w-3.5 h-3.5 text-amber-700" />
+              <span className="font-myanmar hidden sm:inline">စာအုပ် / အသံတင်ရန်</span>
+              <span className="text-[9px] bg-amber-400 text-stone-950 font-bold px-1.5 py-0.2 rounded font-mono">
+                ADMIN
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenUploadModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors whitespace-nowrap shrink-0"
+              title="စာအုပ် / PDF တင်သွင်းရန်"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="font-myanmar hidden sm:inline">စာအုပ်တင်ရန်</span>
+              <span className="font-myanmar sm:hidden">တင်ရန်</span>
+            </button>
+          )}
 
           {currentUser ? (
             <button

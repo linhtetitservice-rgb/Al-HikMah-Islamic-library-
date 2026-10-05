@@ -21,12 +21,18 @@ import {
   User,
   PenTool,
   Check,
+  Headphones,
+  Play,
+  Volume2,
+  Plus,
 } from 'lucide-react';
 import { BookItem, UserProfile } from '../types';
 import { INITIAL_CATEGORIES } from '../data/initialBooks';
 import { toMyanmarDigits } from '../utils/islamicTimes';
 import { DailyHadith } from './DailyHadith';
 import { LibrarySidebar } from './LibrarySidebar';
+import { useAudioPlayer } from '../context/AudioPlayerContext';
+import { isUserAdmin } from '../utils/auth';
 
 interface LibraryViewProps {
   books: BookItem[];
@@ -276,10 +282,27 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     sortBy,
   ]);
 
+  const { playTrack, addToQueue } = useAudioPlayer();
+
   const handleBookClick = (book: BookItem) => {
     if (book.isMemberOnly && !currentUser) {
-      onRequireAuth(`ဤ "${book.titleMm}" စာအုပ်ကို ဖတ်ရှုရန် မန်ဘာအကောင့်ဖြင့် ဝင်ရောက်ပေးပါ`);
+      onRequireAuth(
+        `ဤ "${book.titleMm}" ${book.mediaType === 'audio' ? 'အသံဖိုင်ကို နားဆင်ရန်' : 'စာအုပ်ကို ဖတ်ရှုရန်'} မန်ဘာအကောင့်ဖြင့် ဝင်ရောက်ပေးပါ`
+      );
       return;
+    }
+    // If it's an audio item with a stream URL, play it in the global streaming player
+    if (book.audioUrl) {
+      playTrack({
+        id: book.id,
+        titleMm: book.titleMm,
+        titleAr: book.titleAr,
+        speakerOrReciterMm: book.reciterOrSpeakerMm || book.authorMm,
+        streamUrl: book.audioUrl,
+        categoryMm: book.categoryMm,
+        durationStr: book.audioDuration,
+        coverGradient: book.coverColor,
+      });
     }
     onOpenBook(book);
   };
@@ -313,13 +336,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </p>
 
           <div className="pt-2 flex flex-wrap items-center gap-3">
-            <button
-              onClick={onOpenUploadModal}
-              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl transition-colors flex items-center gap-2 shadow-xs"
-            >
-              <Upload className="w-4 h-4 text-stone-950" />
-              <span className="font-myanmar">စာအုပ် / PDF အသစ်တင်မည်</span>
-            </button>
+            {isUserAdmin(currentUser) ? (
+              <button
+                onClick={onOpenUploadModal}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl transition-colors flex items-center gap-2 shadow-xs"
+              >
+                <Upload className="w-4 h-4 text-stone-950" />
+                <span className="font-myanmar">အသံဖိုင် / စာအုပ် တင်မည်</span>
+                <span className="text-[10px] bg-stone-950 text-amber-300 font-mono font-bold px-1.5 py-0.2 rounded">
+                  ADMIN
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenUploadModal}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl transition-colors flex items-center gap-2 shadow-xs"
+              >
+                <Upload className="w-4 h-4 text-stone-950" />
+                <span className="font-myanmar">စာအုပ် / PDF အသစ်တင်မည်</span>
+              </button>
+            )}
 
             {inProgressBook && currentUser && (
               <button
@@ -821,6 +857,62 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             )}
           </div>
 
+          {/* Audio Category Header Banner */}
+          {selectedCategory === 'audio' && (
+            <div
+              className={`p-4 rounded-2xl border transition-all ${
+                isUserAdmin(currentUser)
+                  ? 'bg-gradient-to-r from-violet-950 via-indigo-950 to-stone-900 text-white border-violet-800 shadow-md'
+                  : 'bg-violet-50/80 border-violet-200 text-violet-950'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      isUserAdmin(currentUser)
+                        ? 'bg-amber-400 text-stone-950 font-bold'
+                        : 'bg-violet-200 text-violet-900'
+                    }`}
+                  >
+                    <Headphones className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-serif font-bold text-sm font-myanmar">
+                        အစ္စလာမ့်တရားတော်များနှင့် ကုရ်အာန် အသံဖိုင် သုတဘဏ်
+                      </h4>
+                      {isUserAdmin(currentUser) && (
+                        <span className="text-[10px] bg-amber-400 text-stone-950 font-mono font-bold px-1.5 py-0.2 rounded">
+                          ADMIN
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className={`text-xs font-myanmar mt-0.5 ${
+                        isUserAdmin(currentUser) ? 'text-violet-200' : 'text-stone-600'
+                      }`}
+                    >
+                      {isUserAdmin(currentUser)
+                        ? 'သင်သည် Admin ဖြစ်သောကြောင့် မိမိထည့်သွင်းလိုသော အသံဖိုင်များနှင့် တရားတော်များကို စာကြည့်တိုက်သို့ တိုက်ရိုက် တင်သွင်းခွင့် ရရှိထားပါသည်။'
+                        : 'ဤကဏ္ဍရှိ အသံဖိုင်များကို စီမံခန့်ခွဲသူ (Admin) မှ သီးသန့် တင်သွင်းထားပြီး မည်သူမဆို လွတ်လပ်စွာ ဖွင့်နားဆင်နိုင်ပါသည်။ (အသံဖိုင် တင်သွင်းခြင်းကို Admin သာ ဆောင်ရွက်ခွင့်ရှိပါသည်)'}
+                    </p>
+                  </div>
+                </div>
+
+                {isUserAdmin(currentUser) && (
+                  <button
+                    onClick={onOpenUploadModal}
+                    className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs font-myanmar shrink-0"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>+ အသံဖိုင် တင်မည်</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Book Catalog Results */}
           {filteredBooks.length === 0 ? (
             <div className="bg-white border border-stone-200 rounded-2xl p-10 sm:p-14 text-center space-y-4 shadow-xs">
@@ -912,6 +1004,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         <span className="text-[11px] font-sans tracking-wide text-amber-200/90 font-medium truncate">
                           {book.categoryMm}
                         </span>
+                        {book.mediaType === 'audio' || book.audioUrl ? (
+                          <div
+                            title="အသံဖိုင် / တရားဒေသနာ"
+                            className="flex items-center gap-1 text-[10px] text-violet-200 bg-violet-950/90 px-2 py-0.5 rounded border border-violet-400/40 shadow-xs"
+                          >
+                            <Headphones className="w-3 h-3 text-amber-300" />
+                            <span className="font-myanmar font-semibold">အသံဖိုင်</span>
+                          </div>
+                        ) : null}
                         {book.isMemberOnly && (
                           <div
                             title="သီးသန့် မန်ဘာဝင်ဖတ်ရှုခွင့်"
@@ -921,7 +1022,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             <span className="font-myanmar">မန်ဘာသီးသန့်</span>
                           </div>
                         )}
-                        {book.isUserUploaded && (
+                        {book.isUserUploaded && !book.audioUrl && (
                           <div className="flex items-center gap-1 text-[10px] text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-400/40">
                             <FileText className="w-3 h-3" />
                             <span className="font-myanmar">ကိုယ်ပိုင် PDF</span>
@@ -949,9 +1050,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                       {/* Book Bottom details */}
                       <div className="relative z-10 flex items-center justify-between text-[11px] text-stone-200 border-t border-white/20 pt-2 font-mono">
-                        <span className="font-myanmar">{toMyanmarDigits(book.totalPages)} မျက်နှာ</span>
+                        <span className="font-myanmar flex items-center gap-1">
+                          {book.mediaType === 'audio' || book.audioUrl ? (
+                            <>
+                              <Clock className="w-3 h-3 text-amber-300" />
+                              <span>{book.audioDuration ? `${book.audioDuration} မိနစ်` : 'အသံဖိုင်'}</span>
+                            </>
+                          ) : (
+                            `${toMyanmarDigits(book.totalPages)} မျက်နှာ`
+                          )}
+                        </span>
                         <span className="font-myanmar">
-                          ဖတ်ရှုမှု {toMyanmarDigits(book.readCount)} ကြိမ်
+                          {book.mediaType === 'audio' || book.audioUrl
+                            ? `နားဆင်မှု ${toMyanmarDigits(book.readCount)} ကြိမ်`
+                            : `ဖတ်ရှုမှု ${toMyanmarDigits(book.readCount)} ကြိမ်`}
                         </span>
                       </div>
                     </div>
@@ -1003,19 +1115,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       </div>
 
                       {/* Card Action Button */}
-                      <div className="pt-2 border-t border-stone-100">
+                      <div className="pt-2 border-t border-stone-100 flex items-center gap-1.5">
                         <button
                           onClick={() => handleBookClick(book)}
-                          className={`w-full py-2 px-3 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5 font-myanmar ${
+                          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5 font-myanmar ${
                             isLocked
                               ? 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200'
+                              : book.mediaType === 'audio' || book.audioUrl
+                              ? 'bg-violet-900 text-white hover:bg-violet-800 shadow-xs'
                               : 'bg-emerald-900 text-white hover:bg-emerald-800 shadow-xs'
                           }`}
                         >
                           {isLocked ? (
                             <>
                               <Lock className="w-3.5 h-3.5 text-amber-700" />
-                              <span>မန်ဘာဝင်ပြီး ဖတ်ရှုရန်</span>
+                              <span>မန်ဘာဝင်ပြီး {book.mediaType === 'audio' ? 'နားဆင်ရန်' : 'ဖတ်ရှုရန်'}</span>
+                            </>
+                          ) : book.mediaType === 'audio' || book.audioUrl ? (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                              <span>ဖွင့်နားဆင်မည်</span>
                             </>
                           ) : (
                             <>
@@ -1024,6 +1143,30 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             </>
                           )}
                         </button>
+
+                        {(book.mediaType === 'audio' || book.audioUrl) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToQueue({
+                                id: book.id,
+                                titleMm: book.titleMm,
+                                titleAr: book.titleAr,
+                                speakerOrReciterMm: book.reciterOrSpeakerMm || book.authorMm,
+                                streamUrl: book.audioUrl || '',
+                                categoryMm: book.categoryMm,
+                                durationStr: book.audioDuration,
+                                coverGradient: book.coverColor,
+                              });
+                            }}
+                            title="တန်းစီစာရင်း (Queue) သို့ ထည့်မည်"
+                            className="py-2 px-2.5 bg-violet-50 hover:bg-violet-100 text-violet-900 border border-violet-200 hover:border-violet-400 rounded-xl text-xs font-myanmar font-semibold flex items-center gap-1 transition-colors shrink-0"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-violet-700" />
+                            <span className="hidden sm:inline">တန်းစီမည်</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1069,11 +1212,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           <p className="font-arabic text-xs text-center text-amber-100 line-clamp-1">
                             {book.titleAr}
                           </p>
+                        ) : book.mediaType === 'audio' || book.audioUrl ? (
+                          <Headphones className="w-5 h-5 mx-auto text-amber-300 animate-pulse" />
                         ) : (
                           <BookOpen className="w-4 h-4 mx-auto text-amber-200/80" />
                         )}
                         <span className="text-[9px] font-mono text-stone-200 text-right">
-                          {toMyanmarDigits(book.totalPages)}p
+                          {book.mediaType === 'audio' || book.audioUrl
+                            ? (book.audioDuration || 'Audio')
+                            : `${toMyanmarDigits(book.totalPages)}p`}
                         </span>
                       </div>
 
@@ -1103,12 +1250,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             </div>
                           )}
 
+                          {book.mediaType === 'audio' || book.audioUrl ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-violet-50 text-violet-900 border border-violet-300 font-semibold px-2 py-0.5 rounded font-myanmar">
+                              <Headphones className="w-3 h-3 text-violet-700" />
+                              <span>အသံဖိုင်</span>
+                            </span>
+                          ) : null}
                           {book.isMemberOnly && (
                             <span className="text-[10px] bg-amber-50 text-amber-900 border border-amber-300 font-semibold px-2 py-0.5 rounded font-myanmar">
                               မန်ဘာသီးသန့်
                             </span>
                           )}
-                          {book.isUserUploaded && (
+                          {book.isUserUploaded && !book.audioUrl && (
                             <span className="text-[10px] bg-emerald-50 text-emerald-900 border border-emerald-300 font-semibold px-2 py-0.5 rounded font-myanmar">
                               ကိုယ်ပိုင် PDF
                             </span>
@@ -1129,14 +1282,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                         <div className="flex items-center gap-2 text-xs text-stone-500 font-myanmar flex-wrap">
                           <span className="text-stone-700 font-medium">
-                            {renderHighlight(book.authorMm, searchQuery)}
+                            {renderHighlight(book.reciterOrSpeakerMm || book.authorMm, searchQuery)}
                           </span>
                           <span aria-hidden="true">·</span>
                           <span className="text-emerald-800 font-medium">{book.categoryMm}</span>
                           <span aria-hidden="true">·</span>
-                          <span>{toMyanmarDigits(book.totalPages)} မျက်နှာ</span>
+                          <span>
+                            {book.mediaType === 'audio' || book.audioUrl
+                              ? `ကြာချိန် ${book.audioDuration || 'အသံဖိုင်'}`
+                              : `${toMyanmarDigits(book.totalPages)} မျက်နှာ`}
+                          </span>
                           <span aria-hidden="true">·</span>
-                          <span>ဖတ်ရှုမှု {toMyanmarDigits(book.readCount)} ကြိမ်</span>
+                          <span>
+                            {book.mediaType === 'audio' || book.audioUrl
+                              ? `နားဆင်မှု ${toMyanmarDigits(book.readCount)} ကြိမ်`
+                              : `ဖတ်ရှုမှု ${toMyanmarDigits(book.readCount)} ကြိမ်`}
+                          </span>
                         </div>
 
                         <p className="text-xs text-stone-600 font-myanmar line-clamp-2 leading-relaxed pt-0.5">
@@ -1146,19 +1307,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </div>
 
                     {/* Action Button */}
-                    <div className="shrink-0 w-full sm:w-auto pt-2 sm:pt-0">
+                    <div className="shrink-0 w-full sm:w-auto pt-2 sm:pt-0 flex items-center gap-2">
                       <button
                         onClick={() => handleBookClick(book)}
                         className={`w-full sm:w-auto px-4 py-2 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 font-myanmar ${
                           isLocked
                             ? 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200'
+                            : book.mediaType === 'audio' || book.audioUrl
+                            ? 'bg-violet-900 text-white hover:bg-violet-800 shadow-xs'
                             : 'bg-emerald-900 text-white hover:bg-emerald-800 shadow-xs'
                         }`}
                       >
                         {isLocked ? (
                           <>
                             <Lock className="w-3.5 h-3.5 text-amber-700" />
-                            <span>မန်ဘာဝင်ရန်</span>
+                            <span>မန်ဘာဝင်ပြီး {book.mediaType === 'audio' ? 'နားဆင်ရန်' : 'ဖတ်ရှုရန်'}</span>
+                          </>
+                        ) : book.mediaType === 'audio' || book.audioUrl ? (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                            <span>နားဆင်မည်</span>
                           </>
                         ) : (
                           <>
@@ -1167,6 +1335,30 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           </>
                         )}
                       </button>
+
+                      {(book.mediaType === 'audio' || book.audioUrl) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addToQueue({
+                              id: book.id,
+                              titleMm: book.titleMm,
+                              titleAr: book.titleAr,
+                              speakerOrReciterMm: book.reciterOrSpeakerMm || book.authorMm,
+                              streamUrl: book.audioUrl || '',
+                              categoryMm: book.categoryMm,
+                              durationStr: book.audioDuration,
+                              coverGradient: book.coverColor,
+                            });
+                          }}
+                          title="တန်းစီစာရင်း (Queue) သို့ ထည့်မည်"
+                          className="px-3 py-2 bg-violet-50 hover:bg-violet-100 text-violet-900 border border-violet-200 hover:border-violet-400 rounded-xl text-xs font-myanmar font-semibold flex items-center gap-1 transition-colors shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-violet-700" />
+                          <span>တန်းစီမည်</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

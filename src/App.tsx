@@ -11,9 +11,12 @@ import { TelegramSyncModal } from './components/TelegramSyncModal';
 import { PrayerTimesModal } from './components/PrayerTimesModal';
 import { Footer } from './components/Footer';
 import { DailyWisdom } from './components/DailyWisdom';
+import { AudioPlayerProvider } from './context/AudioPlayerContext';
+import { StreamingAudioPlayer } from './components/StreamingAudioPlayer';
 import { INITIAL_BOOKS } from './data/initialBooks';
 import { INITIAL_FATWAS } from './data/initialFatwas';
 import { MYANMAR_CITIES } from './utils/islamicTimes';
+import { isUserAdmin } from './utils/auth';
 import { BookItem, CityLocation, FatwaItem, UserProfile } from './types';
 import {
   auth,
@@ -229,13 +232,26 @@ export default function App() {
   }, [currentUser]);
 
   // Auth requirement handler for member-only books
-  const handleRequireAuth = (actionDescription: string) => {
+  const handleRequireAuth = (actionDescription?: string) => {
     setAuthPromptMessage(actionDescription);
     setShowAuthModal(true);
   };
 
-  // Add Book / PDF with Firestore persistence
+  // Add Book / PDF / Audio with Firestore persistence & Admin protection
   const handleAddBook = async (newBook: BookItem) => {
+    // If uploading audio, strictly verify Admin status
+    const isAudio =
+      newBook.mediaType === 'audio' ||
+      newBook.category === 'audio' ||
+      Boolean(newBook.audioUrl);
+
+    if (isAudio && !isUserAdmin(currentUser)) {
+      alert(
+        'ခွင့်ပြုချက် မရှိပါ! အသံဖိုင်နှင့် တရားတော်များကို စီမံခန့်ခွဲသူ (Admin) သာလျှင် တင်သွင်းခွင့် ရှိပါသည်။'
+      );
+      return;
+    }
+
     setBooks((prev) => [newBook, ...prev]);
     setReadingBook(newBook);
 
@@ -408,8 +424,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-stone-900 selection:bg-emerald-100 selection:text-emerald-950 font-sans">
-      {/* 1. Header Prayer Times & Astronomical Zawal Bar (နမားဇ် ၅ ကြိမ်၊ နေထွက်၊ နေဝင်၊ မွန်းတည့်ဇဝါလ် နှင့် အစ္စလာမ့်ပြက္ခဒိန်) */}
+    <AudioPlayerProvider>
+      <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-stone-900 selection:bg-emerald-100 selection:text-emerald-950 font-sans pb-24">
+        {/* 1. Header Prayer Times & Astronomical Zawal Bar (နမားဇ် ၅ ကြိမ်၊ နေထွက်၊ နေဝင်၊ မွန်းတည့်ဇဝါလ် နှင့် အစ္စလာမ့်ပြက္ခဒိန်) */}
       <HeaderPrayerBar
         selectedCity={selectedCity}
         onSelectCity={setSelectedCity}
@@ -567,8 +584,10 @@ export default function App() {
       {/* MODAL 3: Book & PDF Upload Modal */}
       {showUploadModal && (
         <UploadBookModal
+          currentUser={currentUser}
           onClose={() => setShowUploadModal(false)}
           onAddBook={handleAddBook}
+          onRequireAuth={handleRequireAuth}
         />
       )}
 
@@ -615,6 +634,13 @@ export default function App() {
           }}
         />
       )}
+
+      {/* GLOBAL PERSISTENT STREAMING AUDIO PLAYER */}
+      <StreamingAudioPlayer
+        currentUser={currentUser}
+        onAddBookToLibrary={handleAddBook}
+      />
     </div>
-  );
+  </AudioPlayerProvider>
+);
 }

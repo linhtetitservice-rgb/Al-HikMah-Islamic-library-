@@ -76,16 +76,16 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Col 3: Community & Contribution */}
           <div className="space-y-2.5">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-stone-100 font-sans">
-              စာအုပ်များ ပူးပေါင်းပါဝင်ခြင်း
+              စာအုပ်နှင့် အသံဖိုင် မျှဝေခြင်း
             </h4>
             <p className="text-xs text-stone-400 font-myanmar leading-relaxed">
-              သင့်ထံတွင် ရှိသော အစ္စလာမ့်ကျမ်းစာအုပ်များ၊ PDF စာအုပ်များကို တင်သွင်းမျှဝေနိုင်ပါသည်။
+              သင့်ထံတွင် ရှိသော အစ္စလာမ့်ကျမ်းစာအုပ်များ၊ PDF နှင့် တရားဒေသနာ အသံဖိုင် (Audio MP3) များကို တင်သွင်းမျှဝေနိုင်ပါသည်။
             </p>
             <button
               onClick={onOpenUploadModal}
               className="inline-block px-3 py-1.5 bg-emerald-950 border border-emerald-800 text-emerald-200 hover:text-white hover:bg-emerald-900 rounded text-xs font-myanmar transition-colors"
             >
-              စာအုပ် / PDF တင်ရန်
+              စာအုပ် / အသံဖိုင် တင်ရန်
             </button>
           </div>
         </div>

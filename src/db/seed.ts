@@ -1,9 +1,12 @@
-import { db } from './index.ts';
+import { db, isCloudSqlAvailable } from './index.ts';
 import { books, fatwas } from './schema.ts';
 import { INITIAL_BOOKS } from '../data/initialBooks.ts';
 import { INITIAL_FATWAS } from '../data/initialFatwas.ts';
 
 export async function seedInitialDataIfNeeded() {
+  if (!isCloudSqlAvailable() || !db) {
+    return;
+  }
   try {
     const existingBooks = await db.select().from(books).limit(1);
     if (existingBooks.length === 0) {

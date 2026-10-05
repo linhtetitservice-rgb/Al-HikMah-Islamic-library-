@@ -9,7 +9,7 @@ service cloud.firestore {
 
     // Hardened Global Helpers
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     function incoming() {
@@ -31,6 +31,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'linhtetitservice@gmail.com' ||
+        ('email' in request.auth.token && request.auth.token.email == 'linhtetitservice@gmail.com') ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -67,19 +68,32 @@ service cloud.firestore {
         && (!('categoryMm' in data) || (data.categoryMm is string && data.categoryMm.size() <= 100))
         && (!('descriptionMm' in data) || (data.descriptionMm is string && data.descriptionMm.size() <= 2000))
         && (!('coverColor' in data) || (data.coverColor is string && data.coverColor.size() <= 100))
-        && data.totalPages is number && data.totalPages >= 0
+        && ((data.totalPages is number && data.totalPages >= 0) || (data.totalPages is string && data.totalPages.size() <= 10))
         && data.isMemberOnly is bool
         && (!('language' in data) || data.language in ['my', 'ar', 'both'])
         && (!('publishedYear' in data) || (data.publishedYear is string && data.publishedYear.size() <= 10))
-        && data.readCount is number && data.readCount >= 0
-        && (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 5))
+        && ((data.readCount is number && data.readCount >= 0) || (data.readCount is string && data.readCount.size() <= 10))
+        && (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 5) || (data.rating is string && data.rating.size() <= 10))
         && (!('isUserUploaded' in data) || data.isUserUploaded is bool)
         && (!('uploaderId' in data) || (data.uploaderId is string && data.uploaderId.size() <= 128))
         && (!('uploaderName' in data) || (data.uploaderName is string && data.uploaderName.size() <= 100))
         && (!('fileData' in data) || (data.fileData is string && data.fileData.size() <= 15000000))
+        && (!('pdfUrl' in data) || (data.pdfUrl is string && data.pdfUrl.size() <= 2000))
+        && (!('audioUrl' in data) || (data.audioUrl is string && data.audioUrl.size() <= 2000))
+        && (!('mediaType' in data) || data.mediaType in ['book', 'audio', 'pdf'])
+        && (!('audioDuration' in data) || (data.audioDuration is string && data.audioDuration.size() <= 50))
+        && (!('reciterOrSpeakerMm' in data) || (data.reciterOrSpeakerMm is string && data.reciterOrSpeakerMm.size() <= 200))
+        && (!('audioFileSize' in data) || (data.audioFileSize is string && data.audioFileSize.size() <= 50))
         && (!('telegramChannel' in data) || (data.telegramChannel is string && data.telegramChannel.size() <= 150))
         && (!('telegramPostId' in data) || (data.telegramPostId is string && data.telegramPostId.size() <= 100))
         && data.createdAt is string && data.createdAt.size() <= 50;
+    }
+
+    // Helper: detect if a document represents audio content
+    function isAudioItem(data) {
+      return ('mediaType' in data && data.mediaType == 'audio')
+        || ('category' in data && data.category == 'audio')
+        || ('audioUrl' in data && data.audioUrl is string && data.audioUrl.size() > 0);
     }
 
     // Validation Blueprint for Bookmark
@@ -152,14 +166,23 @@ service cloud.firestore {
     // Books Collection Rules
     match /books/{bookId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidId(bookId) && isValidBook(incoming())
-                    && (!('uploaderId' in incoming()) || incoming().uploaderId == request.auth.uid);
-      allow update: if isSignedIn() && isValidId(bookId) && isValidBook(incoming()) && (
+      allow create: if isSignedIn() && (
         isAdmin() ||
-        (existing().uploaderId == request.auth.uid) ||
+        (isValidId(bookId) && isValidBook(incoming())
+          && (!('uploaderId' in incoming()) || incoming().uploaderId == request.auth.uid)
+          && !isAudioItem(incoming()))
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isValidId(bookId) && isValidBook(incoming()) && (
+          existing().uploaderId == request.auth.uid && !isAudioItem(existing()) && !isAudioItem(incoming())
+        )) ||
         (incoming().diff(existing()).affectedKeys().hasOnly(['readCount', 'rating']))
       );
-      allow delete: if isSignedIn() && (existing().uploaderId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (
+        isAdmin() ||
+        (existing().uploaderId == request.auth.uid && !isAudioItem(existing()))
+      );
     }
 
     // Fatwa Questions Rules

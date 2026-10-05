@@ -46,6 +46,12 @@
         "uploaderId": { "type": "string", "maxLength": 128 },
         "uploaderName": { "type": "string", "maxLength": 100 },
         "fileData": { "type": "string", "maxLength": 15000000 },
+        "pdfUrl": { "type": "string", "maxLength": 2000 },
+        "audioUrl": { "type": "string", "maxLength": 2000 },
+        "mediaType": { "type": "string", "enum": ["book", "audio", "pdf"] },
+        "audioDuration": { "type": "string", "maxLength": 50 },
+        "reciterOrSpeakerMm": { "type": "string", "maxLength": 200 },
+        "audioFileSize": { "type": "string", "maxLength": 50 },
         "telegramChannel": { "type": "string", "maxLength": 150 },
         "telegramPostId": { "type": "string", "maxLength": 100 },
         "createdAt": { "type": "string" }
